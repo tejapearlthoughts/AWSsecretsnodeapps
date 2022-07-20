@@ -1,37 +1,30 @@
-//require dependencies
-const express = require("express");
-const cors = require("cors");
-const dotenv = require("dotenv");
-const fs = require("fs").promises;
-const retrieveSecrets = require("./retrieveSecrets");
+const AWS = require("aws-sdk");
 
-//basic express app setup
-const app = express();
-app.use(cors());
+module.exports = () => {
+        //configure AWS SDK
+        const region = "ap-south-1";
+        const client = new AWS.SecretsManager({ region });
 
-//routes to verify that the secrets were retrieved successfully.
-app.get("/", (req, res) => {
-	return res.status(200).json({
-		SECRET_1: process.env.SECRET_1,
-		SECRET_2: process.env.SECRET_2,
-	});
-});
+        const SecretId = "MySecret";
+        return new Promise((resolve, reject) => {
+                //retrieving secrets from secrets manager
+                client.getSecretValue({ SecretId }, (err, data) => {
+                        if (err) {
+                                reject(err);
+                        } else {
+                                //parsing the fetched data into JSON
+                                const secretsJSON = JSON.parse(data.SecretString);
 
-app.listen(4000, async () => {
-	try {
-		//get secretsString:
-		const secretsString = await retrieveSecrets();
-
-		//write to .env file at root level of project:
-		await fs.writeFile(".env", secretsString);
-
-		//configure dotenv package
-		dotenv.config();
-
-		console.log("Server running on port 4000");
-	} catch (error) {
-		//log the error and crash the app
-		console.log("Error in setting environment variables", error);
-		process.exit(-1);
-	}
-});
+                                // creating a string to store write to .env file
+                                // .env file shall look like this :
+                                // SECRET_1 = sample_secret_1
+                                // SECRET_2 = sample_secret_2
+                                let secretsString = "";
+                                Object.keys(secretsJSON).forEach((key) => {
+                                        secretsString += `${key}=${secretsJSON[key]}\n`;
+                                });
+                                resolve(secretsString);
+                        }
+                });
+        });
+};
